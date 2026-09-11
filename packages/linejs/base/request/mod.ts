@@ -32,6 +32,19 @@ export class RequestClient {
 	userAgent: string;
 	#legyTransport?: LegyEncryptedTransport;
 	/**
+	 * Set from outside to observe Legy relay-frame encrypt/decrypt timing —
+	 * `#legyTransport` above is private, and `#encrypt`/`#decrypt` on
+	 * `LegyEncryptedTransport` are true JS private fields, so there is no way
+	 * to wrap either from outside this module the way a public method (e.g.
+	 * `Thrift.writeThrift`) can be. Never read internally; purely an escape
+	 * hatch for a caller that wants real numbers instead of guessing. See
+	 * `LegyEncryptedFetchOptions.onTiming` in `legy.ts` for why passing this
+	 * straight through per-call keeps it race-free under concurrent requests.
+	 */
+	legyOnTiming?: (
+		timing: { encryptMs: number; decryptMs: number | undefined },
+	) => void;
+	/**
 	 * x-line-application
 	 */
 	systemType: string;
@@ -165,6 +178,7 @@ export class RequestClient {
 				application: this.systemType,
 				userAgent: this.userAgent,
 				endpoint: this.client.legy.endpoint,
+				onTiming: this.legyOnTiming,
 			})
 			: await this.client.fetch(request);
 		const nextToken = response.headers.get("x-line-next-access");

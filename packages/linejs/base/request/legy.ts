@@ -12,6 +12,26 @@ export interface LegyEncryptedFetchOptions {
 	endpoint?: string;
 	application: string;
 	userAgent: string;
+	/**
+	 * Invoked once, synchronously, right before `fetch()` returns, with the
+	 * elapsed time of THIS call's own `#encrypt`/`#decrypt` steps.
+	 *
+	 * Deliberately a per-call option rather than a listener stored on the
+	 * transport instance: `#aesKey` and everything else on this class is
+	 * shared across every request that reuses the transport (see
+	 * `RequestClient.legyTransport` in `mod.ts`), and `fetch()` awaits a real
+	 * network round trip between encrypt and decrypt, so a second concurrent
+	 * `fetch()` call (a send racing the dedicated poll) can and does
+	 * interleave in that window. `encryptMs`/`decryptMs` below are plain local
+	 * variables in *this* call's own stack frame, never written to `this` —
+	 * so the only way timing from one call could contaminate another's would
+	 * be through shared mutable state, and there is none to contaminate it
+	 * with. `decryptMs` is `undefined` when the response body was empty and
+	 * `#decrypt` was never reached.
+	 */
+	onTiming?: (
+		timing: { encryptMs: number; decryptMs: number | undefined },
+	) => void;
 }
 
 const LEGY_ENDPOINT = "https://gf.line.naver.jp/enc";
@@ -76,7 +96,9 @@ export class LegyEncryptedTransport {
 		const payload = (leInt & 4) === 4
 			? Buffer.concat([Buffer.from([leInt]), plaintext])
 			: plaintext;
+		const encryptStart = performance.now();
 		let encrypted = this.#encrypt(payload);
+		const encryptMs = performance.now() - encryptStart;
 		if ((leInt & 2) === 2) {
 			encrypted = Buffer.concat([
 				encrypted,
@@ -100,6 +122,7 @@ export class LegyEncryptedTransport {
 		);
 		const responseBody = Buffer.from(await response.arrayBuffer());
 		if (!responseBody.length) {
+			options.onTiming?.({ encryptMs, decryptMs: undefined });
 			return new Response(new Uint8Array(responseBody), {
 				status: response.status,
 				statusText: response.statusText,
@@ -107,7 +130,10 @@ export class LegyEncryptedTransport {
 			});
 		}
 
+		const decryptStart = performance.now();
 		let decrypted = this.#decrypt(responseBody);
+		const decryptMs = performance.now() - decryptStart;
+		options.onTiming?.({ encryptMs, decryptMs });
 		if ((leInt & 4) === 4) decrypted = decrypted.subarray(1);
 		const decoded = decodeLegyHeaders(decrypted);
 		const status = decoded.headers["x-lc"] &&

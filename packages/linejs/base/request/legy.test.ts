@@ -56,6 +56,56 @@ Deno.test("LEGY transport keeps method, headers and body encryption", async () =
 	assertEquals(Buffer.from(body).includes(Buffer.from(plaintext)), false);
 });
 
+Deno.test("LEGY transport reports encrypt/decrypt timing via onTiming", async () => {
+	const transport = new LegyEncryptedTransport();
+	const request = new Request("https://legy.line-apps.com/S4", {
+		method: "POST",
+		headers: { "content-type": "application/x-thrift" },
+		body: new Uint8Array([1, 2, 3]).slice().buffer,
+	});
+	const timings: { encryptMs: number; decryptMs: number | undefined }[] = [];
+	// onTiming fires before the decrypted bytes are parsed as LEGY headers, so
+	// it does not matter that 4 arbitrary bytes are not a real encrypted LINE
+	// response — decrypting them with the transport's own (random, unknown to
+	// this test) key succeeds and yields *some* plaintext; only the later
+	// header parse might reject it as malformed, which this test is not
+	// exercising.
+	await transport.fetch(
+		request,
+		() => Promise.resolve(new Response(new Uint8Array([9, 9, 9, 9]))),
+		{
+			application: "TEST\t1.0",
+			userAgent: "Line/1.0",
+			onTiming: (t) => timings.push(t),
+		},
+	).catch(() => {});
+	assertEquals(timings.length, 1);
+	assert(timings[0].encryptMs >= 0);
+	assert(timings[0].decryptMs !== undefined && timings[0].decryptMs >= 0);
+});
+
+Deno.test("LEGY transport reports decryptMs as undefined when the response body is empty", async () => {
+	const transport = new LegyEncryptedTransport();
+	const request = new Request("https://legy.line-apps.com/S4", {
+		method: "POST",
+		headers: { "content-type": "application/x-thrift" },
+		body: new Uint8Array([1, 2, 3]).slice().buffer,
+	});
+	const timings: { encryptMs: number; decryptMs: number | undefined }[] = [];
+	await transport.fetch(
+		request,
+		() => Promise.resolve(new Response(new Uint8Array())),
+		{
+			application: "TEST\t1.0",
+			userAgent: "Line/1.0",
+			onTiming: (t) => timings.push(t),
+		},
+	);
+	assertEquals(timings.length, 1);
+	assert(timings[0].encryptMs >= 0);
+	assertEquals(timings[0].decryptMs, undefined);
+});
+
 async function roundTrip(
 	init: { signal?: AbortSignal; body?: Uint8Array } = {},
 ): Promise<{ captured: Request; body: Uint8Array }> {
