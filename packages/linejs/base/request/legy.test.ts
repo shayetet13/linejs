@@ -56,6 +56,26 @@ Deno.test("LEGY transport keeps method, headers and body encryption", async () =
 	assertEquals(Buffer.from(body).includes(Buffer.from(plaintext)), false);
 });
 
+Deno.test("LEGY transport carries a private lane role to the injected fetcher", async () => {
+	const transport = new LegyEncryptedTransport();
+	let captured: Request | undefined;
+	const request = new Request("https://legy.line-apps.com/S4", {
+		method: "POST",
+		headers: {
+			"content-type": "application/x-thrift",
+			"x-line-first-lane-role": "send",
+		},
+		body: new Uint8Array([0]),
+	});
+	await transport.fetch(request, (sent) => {
+		captured = sent;
+		return Promise.resolve(new Response(new Uint8Array()));
+	}, { application: "TEST\t1.0", userAgent: "Line/1.0" });
+
+	assert(captured);
+	assertEquals(captured.headers.get("x-line-first-lane-role"), "send");
+});
+
 async function roundTrip(
 	init: { signal?: AbortSignal; body?: Uint8Array } = {},
 ): Promise<{ captured: Request; body: Uint8Array }> {

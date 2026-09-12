@@ -78,6 +78,7 @@ export class RequestClient {
 		path: string = "/S3",
 		headers: Record<string, string | undefined> = {},
 		timeout = this.client.config.timeout,
+		signal?: AbortSignal,
 	): Promise<T> {
 		if (this.client?.disabled) {
 			throw new InternalError(
@@ -95,6 +96,7 @@ export class RequestClient {
 			parse,
 			undefined,
 			timeout,
+			signal,
 		);
 		return res.data.success;
 	}
@@ -124,6 +126,7 @@ export class RequestClient {
 		parse: boolean | string = true,
 		isReRequest: boolean = false,
 		timeout: number = this.client.config.timeout,
+		signal?: AbortSignal,
 	): Promise<ParsedThrift> {
 		const protocol = Protocols[protocolType];
 
@@ -156,7 +159,9 @@ export class RequestClient {
 		const request = new Request(`https://${this.endpoint}${path}`, {
 			method: overrideMethod,
 			headers,
-			signal: AbortSignal.timeout(timeout),
+			signal: signal === undefined
+				? AbortSignal.timeout(timeout)
+				: AbortSignal.any([signal, AbortSignal.timeout(timeout)]),
 			// @ts-expect-error: will fix cuz typescript version change
 			body: Trequest,
 		});

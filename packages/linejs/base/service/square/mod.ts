@@ -130,17 +130,22 @@ export class SquareService implements BaseService {
 		syncToken?: string;
 		limit?: number;
 		direction?: LINETypes.FetchDirection;
+		signal?: AbortSignal;
 	}): Promise<
 		LINETypes.SquareService_fetchSquareChatEvents_result["success"]
 	> {
+		const { signal, ...request } = options;
 		return await this.client.request.request(
 			LINEStruct.SquareService_fetchSquareChatEvents_args({
-				request: { limit: 100, ...options },
+				request: { limit: 100, ...request },
 			}),
 			"fetchSquareChatEvents",
 			this.protocolType,
 			true,
 			this.requestPath,
+			{},
+			this.client.config.timeout,
+			signal,
 		);
 	}
 

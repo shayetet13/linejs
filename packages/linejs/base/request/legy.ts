@@ -145,6 +145,12 @@ export class LegyEncryptedTransport {
 		headers.set("accept", request.headers.get("accept") ?? "*/*");
 		headers.set("accept-encoding", "gzip, deflate");
 		headers.set("connection", "keep-alive");
+		// Private, hop-by-hop routing metadata for an injected fetcher. The
+		// encrypted transport rebuilds the network Request, so without carrying
+		// this across the application's lane pool sees every Square RPC as
+		// `general`. The pool consumes and deletes it before sending to LINE.
+		const laneRole = request.headers.get("x-line-first-lane-role");
+		if (laneRole) headers.set("x-line-first-lane-role", laneRole);
 		return headers;
 	}
 
