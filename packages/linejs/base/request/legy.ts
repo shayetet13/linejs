@@ -151,6 +151,8 @@ export class LegyEncryptedTransport {
 		// `general`. The pool consumes and deletes it before sending to LINE.
 		const laneRole = request.headers.get("x-line-first-lane-role");
 		if (laneRole) headers.set("x-line-first-lane-role", laneRole);
+		const forcedLane = request.headers.get("x-line-first-lane-force");
+		if (forcedLane) headers.set("x-line-first-lane-force", forcedLane);
 		return headers;
 	}
 
