@@ -7,12 +7,17 @@ Deno.test("Node dispatchers are not used on Deno", async () => {
 	assertEquals(await createNodeFetch(true)(30_000), null);
 });
 
-Deno.test("custom fetch handles both RPC and PUSH with cancellation intact", async () => {
-	const requests: Request[] = [];
+Deno.test("PUSH can use a streaming transport separate from buffered RPC fetch", async () => {
+	const rpcRequests: Request[] = [];
+	const pushRequests: Request[] = [];
 	const client = new BaseClient({
 		device: "DESKTOPWIN",
 		fetch: (info) => {
-			requests.push(new Request(info));
+			rpcRequests.push(new Request(info));
+			return Promise.resolve(new Response("ok"));
+		},
+		pushFetch: (info) => {
+			pushRequests.push(new Request(info));
 			return Promise.resolve(new Response("ok"));
 		},
 	});
@@ -23,7 +28,9 @@ Deno.test("custom fetch handles both RPC and PUSH with cancellation intact", asy
 	await client.fetchPush("https://example.invalid/push", {
 		signal: controller.signal,
 	});
-	assertEquals(requests.length, 2);
+	assertEquals(rpcRequests.length, 1);
+	assertEquals(pushRequests.length, 1);
 	controller.abort();
-	assertEquals(requests.map((r) => r.signal.aborted), [true, true]);
+	assertEquals(rpcRequests[0]?.signal.aborted, true);
+	assertEquals(pushRequests[0]?.signal.aborted, true);
 });

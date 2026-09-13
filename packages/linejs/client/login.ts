@@ -42,6 +42,9 @@ export interface InitOptions {
 	 */
 	fetch?: FetchLike;
 
+	/** Separate transport for the streaming `/PUSH` request. */
+	pushFetch?: FetchLike;
+
 	/**
 	 * LEGY encrypted gateway options.
 	 */
@@ -54,6 +57,7 @@ export interface InitOptions {
 const createBaseClient = (init: InitOptions) =>
 	new BaseClient({
 		fetch: init.fetch,
+		pushFetch: init.pushFetch,
 		device: init.device,
 		version: init.version,
 		endpoint: init.endpoint,

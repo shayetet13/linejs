@@ -84,6 +84,13 @@ export interface ClientInit {
 	fetch?: FetchLike;
 
 	/**
+	 * Optional streaming transport used only by the long-lived `/PUSH` call.
+	 * A buffered custom RPC transport cannot safely carry a request whose body
+	 * remains open for the lifetime of the connection.
+	 */
+	pushFetch?: FetchLike;
+
+	/**
 	 * LEGY encrypted gateway options.
 	 *
 	 * `auto` encrypts requests for modern JWT/primary/auth-key tokens while
@@ -137,6 +144,7 @@ export class BaseClient extends TypedEventEmitter<ClientEvents> {
 	readonly square: SquareService;
 	readonly talk: TalkService;
 	#customFetch?: FetchLike;
+	#customPushFetch?: FetchLike;
 	#nodeFetch = createNodeFetch(false);
 	#nodePushFetch = createNodeFetch(true);
 	disabled?: boolean;
@@ -179,6 +187,9 @@ export class BaseClient extends TypedEventEmitter<ClientEvents> {
 		}
 		if (init.fetch) {
 			this.#customFetch = init.fetch;
+		}
+		if (init.pushFetch) {
+			this.#customPushFetch = init.pushFetch;
 		}
 		this.deviceDetails = deviceDetails;
 		this.endpoint = init.endpoint ?? "legy.line-apps.com";
@@ -269,6 +280,9 @@ export class BaseClient extends TypedEventEmitter<ClientEvents> {
 
 	/** Node PUSH requires HTTP/2. Explicit custom transports retain control. */
 	readonly fetchPush: Fetch = async (info, init) => {
+		if (this.#customPushFetch) {
+			return await this.#customPushFetch(new Request(info, init));
+		}
 		if (this.#customFetch) return this.fetch(info, init);
 		const fetchFn = (await this.#nodePushFetch(this.config.timeout)) ??
 			this.fetch;
