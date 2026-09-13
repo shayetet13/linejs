@@ -19,11 +19,13 @@ function stubBase(options: {
 		settle = resolve;
 	});
 	const empty = async function* () {};
+	const polling = {
+		listenTarget: [3, 8],
+		listenTalkEvents: options.talk ?? empty,
+		listenSquareEvents: options.square ?? empty,
+	};
 	const base = {
-		createPolling: () => ({
-			listenTalkEvents: options.talk ?? empty,
-			listenSquareEvents: options.square ?? empty,
-		}),
+		createPolling: () => polling,
 		push: {
 			opStream: { close() {} },
 			sqStream: { close() {} },
@@ -37,8 +39,22 @@ function stubBase(options: {
 			options.onLog?.();
 		},
 	};
-	return { base, logs, logged };
+	return { base, logs, logged, polling };
 }
+
+Deno.test("listen subscribes only to requested push services", () => {
+	const square = stubBase({});
+	new Client(square.base as never).listen({ square: true, talk: false });
+	assertEquals(square.polling.listenTarget, [3]);
+
+	const talk = stubBase({});
+	new Client(talk.base as never).listen({ square: false, talk: true });
+	assertEquals(talk.polling.listenTarget, [8]);
+
+	const both = stubBase({});
+	new Client(both.base as never).listen({ square: true, talk: true });
+	assertEquals(both.polling.listenTarget, [3, 8]);
+});
 
 // The listen loops are floating IIFEs: a throw from the event stream used to
 // reject one with nobody watching, which Deno reports as "Uncaught (in

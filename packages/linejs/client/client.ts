@@ -129,6 +129,14 @@ export class Client extends TypedEventEmitter<ClientEvents> {
 		opts: ListenOptions = { talk: true, square: true },
 	): void {
 		const polling = this.base.createPolling();
+		// Subscribe the pusher only to services the caller requested. Polling's
+		// historical default is [Square, Talk]; leaving it unchanged meant a
+		// Square-only worker still opened Talk service 8 and ran its control
+		// traffic for no consumer.
+		polling.listenTarget = [
+			...(opts.square ? [3] : []),
+			...(opts.talk ? [8] : []),
+		];
 		const signal = opts.signal;
 		signal && signal.addEventListener("abort", () => {
 			this.base.push.opStream.close();
